@@ -372,6 +372,59 @@ test("GitHub acquisition follows codeload redirects and records archive identity
   }
 });
 
+test("GitHub acquisition sends auth only to GitHub API requests", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCacheDir = process.env.PREFLIGHTSEAL_CACHE_DIR;
+  const originalToken = process.env.GITHUB_TOKEN;
+  process.env.PREFLIGHTSEAL_CACHE_DIR = await mkdtemp(path.join(os.tmpdir(), "pfs-gh-cache-"));
+  process.env.GITHUB_TOKEN = "test-ci-token";
+  const apiAuthHeaders: Array<string | null> = [];
+  let codeloadAuthHeader: string | null = "unexpected";
+
+  try {
+    const archive = gzipSync(makeTar([
+      { name: "owner-repo-aaaaaaaa/AGENTS.md", type: "0", content: "# token auth\n" }
+    ]));
+    globalThis.fetch = async (urlInput: string | URL | Request, init?: RequestInit) => {
+      const url = String(urlInput);
+      const authHeader = new Headers(init?.headers).get("authorization");
+      if (url === "https://api.github.com/repos/owner/repo") {
+        apiAuthHeaders.push(authHeader);
+        return jsonResponse({ default_branch: "main" });
+      }
+      if (url === "https://api.github.com/repos/owner/repo/commits/main") {
+        apiAuthHeaders.push(authHeader);
+        return jsonResponse({ sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
+      }
+      if (url === "https://api.github.com/repos/owner/repo/tarball/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+        apiAuthHeaders.push(authHeader);
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://codeload.github.com/owner/repo/tar.gz/aaaaaaaa" }
+        });
+      }
+      if (url === "https://codeload.github.com/owner/repo/tar.gz/aaaaaaaa") {
+        codeloadAuthHeader = authHeader;
+        return new Response(archive, { status: 200 });
+      }
+      throw new Error(`unexpected GitHub request: ${url}`);
+    };
+
+    await acquireGitHubSource("https://github.com/owner/repo");
+
+    assert.deepEqual(apiAuthHeaders, ["Bearer test-ci-token", "Bearer test-ci-token", "Bearer test-ci-token"]);
+    assert.equal(codeloadAuthHeader, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreCacheEnv(originalCacheDir);
+    if (originalToken === undefined) {
+      delete process.env.GITHUB_TOKEN;
+    } else {
+      process.env.GITHUB_TOKEN = originalToken;
+    }
+  }
+});
+
 test("GitHub acquisition rejects invalid API shapes and commit SHAs", async () => {
   const originalFetch = globalThis.fetch;
   const originalCacheDir = process.env.PREFLIGHTSEAL_CACHE_DIR;

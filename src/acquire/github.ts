@@ -224,10 +224,7 @@ async function downloadTarball(source: GitHubSource, commit: string, outputPath:
     const requestUrl = validateGitHubArchiveUrl(currentUrl);
     response = await fetch(requestUrl, {
       redirect: "manual",
-      headers: {
-        "accept": "application/vnd.github+json",
-        "user-agent": "preflightseal"
-      }
+      headers: githubRequestHeaders(requestUrl)
     });
     if (![301, 302, 303, 307, 308].includes(response.status)) {
       break;
@@ -330,10 +327,7 @@ async function readCacheObject(
 async function githubJson(url: URL): Promise<Record<string, unknown>> {
   const requestUrl = validateGitHubApiUrl(url);
   const response = await fetch(requestUrl, {
-    headers: {
-      "accept": "application/vnd.github+json",
-      "user-agent": "preflightseal"
-    }
+    headers: githubRequestHeaders(requestUrl)
   });
   if (!response.ok) {
     throw new Error(`GitHub API request failed: HTTP ${response.status}`);
@@ -474,6 +468,28 @@ function validateGitHubArchiveUrl(input: string | URL): URL {
     throw new Error(`unexpected GitHub archive download host: ${url.hostname}`);
   }
   return url;
+}
+
+function githubRequestHeaders(url: URL): Record<string, string> {
+  const headers: Record<string, string> = {
+    "accept": "application/vnd.github+json",
+    "user-agent": "preflightseal"
+  };
+  const token = githubAuthToken();
+  if (token && url.hostname.toLocaleLowerCase("en-US") === "api.github.com") {
+    headers.authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function githubAuthToken(): string | null {
+  for (const name of ["PREFLIGHTSEAL_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]) {
+    const value = process.env[name]?.trim();
+    if (value && !/[\r\n]/.test(value)) {
+      return value;
+    }
+  }
+  return null;
 }
 
 function stringMetadata(source: SourceIdentity, field: string): string | undefined {
