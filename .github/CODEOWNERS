@@ -1,0 +1,11 @@
+# Repository control surfaces should remain under maintainer review.
+* @alinafe82
+
+/.github/ @alinafe82
+/package.json @alinafe82
+/package-lock.json @alinafe82
+/LICENSE @alinafe82
+/SECURITY.md @alinafe82
+/src/ @alinafe82
+/scripts/ @alinafe82
+/schemas/ @alinafe82

@@ -1,0 +1,61 @@
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run all release checks without publishing to npm"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: release checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm test
+      - run: npm run coverage
+      - run: npm run schemas:check
+      - run: npm run dogfood:fixtures
+      - run: npm run package:audit
+      - run: npm run secret:scan
+      - run: npm run release:contamination-check
+      - run: npm audit --ignore-scripts
+
+  publish:
+    name: npm provenance publish
+    needs: check
+    if: ${{ github.event.repository.private == false && (github.event_name == 'release' || github.event.inputs.dry_run == 'false') }}
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm publish --access public

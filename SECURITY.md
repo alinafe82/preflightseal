@@ -14,6 +14,11 @@ disclosure. Include:
 
 Do not include secrets, private keys, access tokens, or customer data in reports.
 
+The official repository is `https://github.com/alinafe82/preflightseal`. The
+official npm package name is `preflightseal` when published by the maintainer.
+Please report confusing package names, impersonation attempts, or compromised
+release artifacts as security issues.
+
 ## Security Invariants
 
 PreflightSeal treats source input as malicious. The current invariants are:
@@ -42,3 +47,9 @@ executable path. Scanner processes run without a shell, with a temporary
 isolated `HOME`, a minimal environment, timeout enforcement, and bounded output
 capture. Credentials are passed only when the provider requires them and are
 redacted from scanner error evidence.
+
+## Release Integrity
+
+Maintainer releases should be built from protected `main`, pass CI, and publish
+to npm through GitHub Actions trusted publishing with provenance. Long-lived npm
+publish tokens should not be used for routine releases.
