@@ -16,7 +16,8 @@ test("CLI supports top-level help", async () => {
 test("CLI creates a JSON plan and installs with explicit warning acceptance", async () => {
   const source = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-source-"));
   const target = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-target-"));
-  const planPath = path.join(os.tmpdir(), `pfs-plan-${process.pid}-${Date.now()}.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   await writeFile(path.join(source, "AGENTS.md"), "# CLI guidance\n");
 
   const planRun = await runNode([cli, "plan", source, "--target-root", target, "--out", planPath, "--json"]);
@@ -46,7 +47,8 @@ test("CLI inspect exits with BLOCK for blocking evidence", async () => {
 test("CLI JSON errors include stable codes and decision states", async () => {
   const source = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-source-"));
   const target = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-target-"));
-  const planPath = path.join(os.tmpdir(), `pfs-plan-${process.pid}-${Date.now()}.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   await writeFile(path.join(source, "AGENTS.md"), "# CLI guidance\n");
 
   const planRun = await runNode([cli, "plan", source, "--target-root", target, "--out", planPath, "--json"]);
@@ -70,7 +72,8 @@ test("CLI JSON errors include stable codes and decision states", async () => {
 test("CLI plan output prints copyable warning fingerprints", async () => {
   const source = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-source-"));
   const target = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-target-"));
-  const planPath = path.join(os.tmpdir(), `pfs-plan-${process.pid}-${Date.now()}-text.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   await writeFile(path.join(source, "AGENTS.md"), "# CLI guidance\n");
 
   const run = await runNode([cli, "plan", source, "--target-root", target, "--out", planPath]);
@@ -94,7 +97,8 @@ test("CLI rejects unsupported targets", async () => {
 test("CLI verifies, explains, and reports rollback conflicts for modified receipts", async () => {
   const source = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-source-"));
   const target = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-target-"));
-  const planPath = path.join(os.tmpdir(), `pfs-plan-${process.pid}-${Date.now()}.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-cli-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   await writeFile(path.join(source, "AGENTS.md"), "# CLI guidance\n");
 
   const planRun = await runNode([cli, "plan", source, "--target-root", target, "--out", planPath, "--json"]);

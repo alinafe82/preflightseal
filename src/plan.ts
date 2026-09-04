@@ -1,5 +1,5 @@
 import path from "node:path";
-import { mkdir, realpath, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 
 import { acquireGitHubSource, isGitHubHttpsSource } from "./acquire/github.ts";
 import { acquireLocalSource } from "./acquire/local.ts";
@@ -124,10 +124,25 @@ export async function createPlan(sourceInput: string, options: PlanOptions): Pro
     seal: computePlanSeal(planWithoutSeal)
   };
   if (options.out) {
-    await mkdir(path.dirname(options.out), { recursive: true });
-    await writeFile(options.out, `${JSON.stringify(plan, null, 2)}\n`, { mode: 0o644 });
+    await writePlanFile(options.out, plan);
   }
   return plan;
+}
+
+async function writePlanFile(outPath: string, plan: PreflightPlan): Promise<void> {
+  const outputPath = path.resolve(outPath);
+  const outputDir = path.dirname(outputPath);
+  await mkdir(outputDir, { recursive: true });
+  const stagingDir = await mkdtemp(path.join(outputDir, ".preflightseal-plan-"));
+  const stagingPath = path.join(stagingDir, "plan.json");
+
+  try {
+    await writeFile(stagingPath, `${JSON.stringify(plan, null, 2)}\n`, { mode: 0o600 });
+    await rename(stagingPath, outputPath);
+    await chmod(outputPath, 0o644);
+  } finally {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 async function resolveSource(sourceInput: string): Promise<{ source: SourceIdentity; sourceRoot: string }> {

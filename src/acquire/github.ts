@@ -198,10 +198,10 @@ function cacheKeyForArchiveSha(archiveSha256: string): string {
 async function resolveCommit(source: GitHubSource): Promise<ResolvedCommit> {
   let ref = source.requestedRef;
   if (ref === "HEAD") {
-    const repo = await githubJson(`https://api.github.com/repos/${source.owner}/${source.repo}`);
+    const repo = await githubJson(githubApiUrl("repos", source.owner, source.repo));
     ref = stringField(repo, "default_branch");
   }
-  const apiUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/commits/${encodeURIComponent(ref)}`;
+  const apiUrl = githubApiUrl("repos", source.owner, source.repo, "commits", ref);
   const commit = await githubJson(apiUrl);
   const sha = stringField(commit, "sha");
   if (!/^[a-f0-9]{40}$/i.test(sha)) {
@@ -211,18 +211,18 @@ async function resolveCommit(source: GitHubSource): Promise<ResolvedCommit> {
     commit: sha,
     requestedRef: source.requestedRef,
     resolvedRef: ref,
-    apiUrl
+    apiUrl: apiUrl.toString()
   };
 }
 
 async function downloadTarball(source: GitHubSource, commit: string, outputPath: string, sourceRoot: string): Promise<DownloadedArchive> {
-  const url = `https://api.github.com/repos/${source.owner}/${source.repo}/tarball/${commit}`;
+  const url = githubApiUrl("repos", source.owner, source.repo, "tarball", commit);
   let currentUrl = url;
   const redirectChain: DownloadedArchive["redirectChain"] = [];
   let response: Response | undefined;
   for (let redirects = 0; redirects <= 5; redirects += 1) {
-    validateGitHubArchiveUrl(currentUrl);
-    response = await fetch(currentUrl, {
+    const requestUrl = validateGitHubArchiveUrl(currentUrl);
+    response = await fetch(requestUrl, {
       redirect: "manual",
       headers: {
         "accept": "application/vnd.github+json",
@@ -236,9 +236,8 @@ async function downloadTarball(source: GitHubSource, commit: string, outputPath:
     if (!location) {
       throw new Error("GitHub archive redirect did not include a location");
     }
-    const nextUrl = new URL(location, currentUrl).toString();
-    validateGitHubArchiveUrl(nextUrl);
-    redirectChain.push({ status: response.status, from: currentUrl, to: nextUrl });
+    const nextUrl = validateGitHubArchiveUrl(new URL(location, requestUrl));
+    redirectChain.push({ status: response.status, from: requestUrl.toString(), to: nextUrl.toString() });
     currentUrl = nextUrl;
   }
   if (!response || [301, 302, 303, 307, 308].includes(response.status)) {
@@ -253,8 +252,8 @@ async function downloadTarball(source: GitHubSource, commit: string, outputPath:
     sha256: archive.sha256,
     byteLength: archive.byteLength,
     extraction: archive.extraction,
-    apiUrl: url,
-    finalUrl: response.url || currentUrl,
+    apiUrl: url.toString(),
+    finalUrl: response.url || currentUrl.toString(),
     redirectChain
   };
 }
@@ -328,9 +327,9 @@ async function readCacheObject(
   };
 }
 
-async function githubJson(url: string): Promise<Record<string, unknown>> {
-  validateGitHubApiUrl(url);
-  const response = await fetch(url, {
+async function githubJson(url: URL): Promise<Record<string, unknown>> {
+  const requestUrl = validateGitHubApiUrl(url);
+  const response = await fetch(requestUrl, {
     headers: {
       "accept": "application/vnd.github+json",
       "user-agent": "preflightseal"
@@ -454,19 +453,27 @@ async function exists(inputPath: string): Promise<boolean> {
   });
 }
 
-function validateGitHubApiUrl(input: string): void {
-  const url = new URL(input);
+function githubApiUrl(...pathSegments: string[]): URL {
+  const url = new URL("https://api.github.com/");
+  url.pathname = `/${pathSegments.map((segment) => encodeURIComponent(segment)).join("/")}`;
+  return validateGitHubApiUrl(url);
+}
+
+function validateGitHubApiUrl(input: string | URL): URL {
+  const url = typeof input === "string" ? new URL(input) : input;
   if (url.protocol !== "https:" || url.hostname.toLocaleLowerCase("en-US") !== "api.github.com") {
     throw new Error(`unexpected GitHub API host: ${url.hostname}`);
   }
+  return url;
 }
 
-function validateGitHubArchiveUrl(input: string): void {
-  const url = new URL(input);
+function validateGitHubArchiveUrl(input: string | URL): URL {
+  const url = typeof input === "string" ? new URL(input) : input;
   const host = url.hostname.toLocaleLowerCase("en-US");
   if (url.protocol !== "https:" || (host !== "api.github.com" && host !== "codeload.github.com")) {
     throw new Error(`unexpected GitHub archive download host: ${url.hostname}`);
   }
+  return url;
 }
 
 function stringMetadata(source: SourceIdentity, field: string): string | undefined {
