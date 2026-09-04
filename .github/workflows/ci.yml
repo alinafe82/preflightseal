@@ -84,8 +84,10 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run dogfood:fixtures
-      - if: github.event_name != 'pull_request' && github.event.repository.private == false
+      - if: github.event.repository.private == false && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         run: npm run dogfood:self
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
   package:
     name: package (${{ matrix.os }})
