@@ -1,3 +1,5 @@
+import { SCHEMA_VERSION } from "./schema.ts";
+
 export type DecisionState = "ALLOW" | "WARN" | "BLOCK" | "INCONCLUSIVE";
 
 export type AnalyzerStatus =
@@ -15,12 +17,17 @@ export type Severity = "info" | "low" | "medium" | "high" | "critical";
 export type InventoryEntryType = "directory" | "file" | "symlink";
 
 export interface Finding {
+  schemaVersion: typeof SCHEMA_VERSION.FINDING;
   id: string;
+  fingerprint: string;
   title: string;
+  category: string;
   decision: DecisionState;
   severity: Severity;
   path?: string;
   evidence: string;
+  providerId?: string;
+  operationIdentity?: string;
   recommendation: string;
 }
 
@@ -43,16 +50,23 @@ export interface Inventory {
 }
 
 export interface SourceIdentity {
+  schemaVersion: typeof SCHEMA_VERSION.SOURCE;
   kind: "local" | "github";
   originalInput: string;
   canonical: string;
+  canonicalIdentity: string;
+  requestedRef?: string;
   resolvedRevision: string;
+  archiveSha256?: string;
   contentDigest: string;
+  cacheKey?: string;
+  immutableLocator?: string;
   retrievedAt: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface AnalyzerResult {
+  schemaVersion: typeof SCHEMA_VERSION.ANALYZER_RESULT;
   providerId: string;
   status: AnalyzerStatus;
   startedAt: string;
@@ -72,10 +86,13 @@ export interface Policy {
 }
 
 export interface PolicyEvaluation {
+  schemaVersion: typeof SCHEMA_VERSION.POLICY_EVALUATION;
   decision: DecisionState;
   reasons: string[];
   warningIds: string[];
+  warningFingerprints: string[];
   blockingIds: string[];
+  blockingFingerprints: string[];
   inconclusiveProviderIds: string[];
 }
 
@@ -89,6 +106,7 @@ export type FileState =
   | { kind: "file"; sha256: string; size: number; mode: number };
 
 export interface InstallOperation {
+  schemaVersion: typeof SCHEMA_VERSION.INSTALL_OPERATION;
   op: "write_file";
   sourcePath: string;
   targetPath: string;
@@ -103,7 +121,7 @@ export interface PlanTarget {
 }
 
 export interface PreflightPlan {
-  schemaVersion: "preflightseal.plan.v1";
+  schemaVersion: typeof SCHEMA_VERSION.PLAN;
   createdAt: string;
   source: SourceIdentity;
   target: PlanTarget;
@@ -113,6 +131,7 @@ export interface PreflightPlan {
   policy: Policy;
   policyDigest: string;
   evaluation: PolicyEvaluation;
+  warningFingerprints: string[];
   operations: InstallOperation[];
   preconditions: TargetStatePrecondition[];
   seal: string;
@@ -127,11 +146,36 @@ export interface ReceiptOperation {
 }
 
 export interface InstallReceipt {
-  schemaVersion: "preflightseal.receipt.v1";
+  schemaVersion: typeof SCHEMA_VERSION.RECEIPT;
+  receiptId: string;
+  transactionId: string;
   planSeal: string;
   installedAt: string;
   target: PlanTarget;
-  acceptedWarnings: string[];
+  acceptedWarningFingerprints: string[];
   operations: ReceiptOperation[];
   receiptDigest: string;
+}
+
+export interface VerificationResult {
+  schemaVersion: typeof SCHEMA_VERSION.VERIFICATION_RESULT;
+  receiptId: string;
+  transactionId: string;
+  planSeal: string;
+  verifiedAt: string;
+  ok: boolean;
+  conflicts: string[];
+  verificationDigest: string;
+}
+
+export interface RollbackResult {
+  schemaVersion: typeof SCHEMA_VERSION.ROLLBACK_RESULT;
+  receiptId: string;
+  transactionId: string;
+  planSeal: string;
+  rolledBackAt: string;
+  ok: boolean;
+  conflicts: string[];
+  operations: string[];
+  rollbackDigest: string;
 }

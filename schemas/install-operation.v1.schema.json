@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/install-operation.v1.schema.json",
+  "title": "PreflightSeal Install Operation v1",
+  "type": "object",
+  "required": ["schemaVersion", "op", "sourcePath", "targetPath", "sha256", "size", "mode"],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.install-operation.v1" },
+    "op": { "const": "write_file" },
+    "sourcePath": { "type": "string", "minLength": 1 },
+    "targetPath": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "size": { "type": "integer", "minimum": 0 },
+    "mode": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": false
+}

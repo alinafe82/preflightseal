@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/preflight-plan.v1.schema.json",
+  "title": "PreflightSeal Plan v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "createdAt",
+    "source",
+    "target",
+    "inventoryDigest",
+    "analyzerEvidenceDigest",
+    "analyzerResults",
+    "policy",
+    "policyDigest",
+    "evaluation",
+    "warningFingerprints",
+    "operations",
+    "preconditions",
+    "seal"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.plan.v1" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "source": { "$ref": "source-identity.v1.schema.json" },
+    "target": {
+      "type": "object",
+      "required": ["runtime", "root"],
+      "properties": {
+        "runtime": { "const": "codex" },
+        "root": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "inventoryDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "analyzerEvidenceDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "analyzerResults": { "type": "array", "items": { "$ref": "analyzer-result.v1.schema.json" } },
+    "policy": {
+      "type": "object",
+      "required": ["id", "version", "requiredAnalyzers", "warnRequiresAcceptance", "blockedFindingIds"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "requiredAnalyzers": { "type": "array", "items": { "type": "string" } },
+        "warnRequiresAcceptance": { "type": "boolean" },
+        "blockedFindingIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "policyDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "evaluation": { "$ref": "policy-evaluation.v1.schema.json" },
+    "warningFingerprints": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^pfs1:sha256:[a-f0-9]{64}$" }
+    },
+    "operations": { "type": "array", "items": { "$ref": "install-operation.v1.schema.json" } },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["targetPath", "expected"],
+        "properties": {
+          "targetPath": { "type": "string", "minLength": 1 },
+          "expected": { "$ref": "#/$defs/fileState" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "seal": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+  },
+  "$defs": {
+    "fileState": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["absent", "file"] },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "size": { "type": "integer", "minimum": 0 },
+        "mode": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

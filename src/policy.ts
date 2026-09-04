@@ -1,4 +1,6 @@
 import type { AnalyzerResult, DecisionState, Finding, Policy, PolicyEvaluation } from "./types.ts";
+import { fingerprintFinding } from "./findings.ts";
+import { SCHEMA_VERSION } from "./schema.ts";
 import { sha256Json } from "./util/crypto.ts";
 
 export function defaultPolicy(): Policy {
@@ -18,9 +20,9 @@ export function digestPolicy(policy: Policy): string {
 export function evaluatePolicy(
   policy: Policy,
   analyzerResults: AnalyzerResult[],
-  acceptedWarnings: string[] = []
+  acceptedWarningFingerprints: string[] = []
 ): PolicyEvaluation {
-  const accepted = new Set(acceptedWarnings);
+  const accepted = new Set(acceptedWarningFingerprints);
   const findings = analyzerResults.flatMap((result) => result.findings);
   const missingRequired = policy.requiredAnalyzers.filter((id) => !analyzerResults.some((result) => result.providerId === id));
   const inconclusiveProviderIds = analyzerResults
@@ -31,7 +33,7 @@ export function evaluatePolicy(
 
   const blockingFindings = findings.filter((finding) => isBlockingFinding(finding, policy));
   const warningFindings = findings.filter((finding) => finding.decision === "WARN");
-  const unacceptedWarningIds = [...new Set(warningFindings.map((finding) => finding.id).filter((id) => !accepted.has(id)))];
+  const unacceptedWarnings = warningFindings.filter((finding) => !accepted.has(findingFingerprint(finding)));
 
   const reasons: string[] = [];
   let decision: DecisionState = "ALLOW";
@@ -46,7 +48,7 @@ export function evaluatePolicy(
     reasons.push("one or more findings violate policy");
   }
 
-  if (decision === "ALLOW" && policy.warnRequiresAcceptance && unacceptedWarningIds.length > 0) {
+  if (decision === "ALLOW" && policy.warnRequiresAcceptance && unacceptedWarnings.length > 0) {
     decision = "WARN";
     reasons.push("one or more understood risks require scoped acceptance");
   }
@@ -56,10 +58,13 @@ export function evaluatePolicy(
   }
 
   return {
+    schemaVersion: SCHEMA_VERSION.POLICY_EVALUATION,
     decision,
     reasons,
-    warningIds: unacceptedWarningIds,
+    warningIds: uniqueStrings(unacceptedWarnings.map((finding) => finding.id)),
+    warningFingerprints: uniqueStrings(unacceptedWarnings.map(findingFingerprint)),
     blockingIds: [...new Set(blockingFindings.map((finding) => finding.id))],
+    blockingFingerprints: uniqueStrings(blockingFindings.map(findingFingerprint)),
     inconclusiveProviderIds: [...new Set(inconclusiveProviderIds)]
   };
 }
@@ -68,4 +73,12 @@ function isBlockingFinding(finding: Finding, policy: Policy): boolean {
   return finding.decision === "BLOCK"
     || finding.severity === "critical"
     || policy.blockedFindingIds.includes(finding.id);
+}
+
+function findingFingerprint(finding: Finding): string {
+  return finding.fingerprint ?? fingerprintFinding(finding);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort();
 }

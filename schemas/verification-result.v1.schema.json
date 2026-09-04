@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/verification-result.v1.schema.json",
+  "title": "PreflightSeal Verification Result v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "receiptId",
+    "transactionId",
+    "planSeal",
+    "verifiedAt",
+    "ok",
+    "conflicts",
+    "verificationDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.verification-result.v1" },
+    "receiptId": { "type": "string", "minLength": 1 },
+    "transactionId": { "type": "string", "minLength": 1 },
+    "planSeal": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "verifiedAt": { "type": "string", "format": "date-time" },
+    "ok": { "type": "boolean" },
+    "conflicts": { "type": "array", "items": { "type": "string" } },
+    "verificationDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

@@ -1,4 +1,5 @@
 .preflightseal/
+.specs/
 node_modules/
 coverage/
 dist/
