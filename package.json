@@ -1,0 +1,37 @@
+{
+  "name": "preflightseal",
+  "version": "0.1.0",
+  "description": "Inspect before install. Install only what you inspected.",
+  "type": "module",
+  "bin": {
+    "preflightseal": "./src/cli.ts"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "check": "node --check src/cli.ts && node --test tests/*.test.ts",
+    "test": "node --test tests/*.test.ts",
+    "smoke": "node src/cli.ts --help"
+  },
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "keywords": [
+    "ai-agent",
+    "security",
+    "supply-chain",
+    "mcp",
+    "codex",
+    "cli"
+  ],
+  "license": "MIT"
+}

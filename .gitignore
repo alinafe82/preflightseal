@@ -1,0 +1,6 @@
+.preflightseal/
+node_modules/
+coverage/
+dist/
+*.log
+*.tmp
