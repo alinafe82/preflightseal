@@ -291,7 +291,8 @@ test("install rejects unknown accepted warning fingerprints", async () => {
 });
 
 test("receipt reader rejects unsupported schema versions", async () => {
-  const receiptPath = path.join(os.tmpdir(), `pfs-receipt-${process.pid}-${Date.now()}.json`);
+  const receiptDir = await mkdtemp(path.join(os.tmpdir(), "pfs-receipt-"));
+  const receiptPath = path.join(receiptDir, "receipt.json");
   await writeFile(receiptPath, JSON.stringify({ schemaVersion: "preflightseal.receipt.v2" }));
 
   await assert.rejects(readReceipt(receiptPath), /unsupported receipt schema/);

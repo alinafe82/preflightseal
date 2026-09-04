@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseGitHubSource } from "../src/acquire/github.ts";
 import { createPlan, inspectSource } from "../src/plan.ts";
 import { defaultPolicy, evaluatePolicy } from "../src/policy.ts";
+import { dogfoodTargets } from "../dogfood/targets.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -24,13 +26,13 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
-  const manifest = JSON.parse(await readFile(path.join(ROOT, "dogfood", "targets.json"), "utf8")) as { targets: Target[] };
+  const targets = dogfoodTargets.map(normalizeTarget);
   const workspace = await mkdtemp(path.join(os.tmpdir(), "preflightseal-live-dogfood-"));
   process.env.PREFLIGHTSEAL_CACHE_DIR = path.join(workspace, "cache");
 
   try {
     const results = [];
-    for (const target of manifest.targets) {
+    for (const target of targets) {
       const inspected = await inspectSource(target.url);
       const evaluation = evaluatePolicy(defaultPolicy(), inspected.analyzerResults);
       const planResult = await attemptPlan(target.url, path.join(workspace, "targets", target.name));
@@ -56,6 +58,14 @@ async function main(argv: string[]): Promise<number> {
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
+}
+
+function normalizeTarget(target: Target): Target {
+  const parsed = parseGitHubSource(target.url);
+  return {
+    ...target,
+    url: parsed.canonicalUrl
+  };
 }
 
 async function attemptPlan(source: string, targetRoot: string): Promise<{ status: string; operations: number; planSeal: string | null }> {

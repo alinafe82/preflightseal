@@ -42,6 +42,38 @@ test("GitHub source parser uses explicit requested ref without hash", () => {
   assert.equal(parseGitHubSource("https://github.com/owner/repo", "release").requestedRef, "release");
 });
 
+test("GitHub acquisition encodes refs as a single API path segment", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCacheDir = process.env.PREFLIGHTSEAL_CACHE_DIR;
+  process.env.PREFLIGHTSEAL_CACHE_DIR = await mkdtemp(path.join(os.tmpdir(), "pfs-gh-cache-"));
+  let requestedEncodedRef = false;
+
+  try {
+    const archive = gzipSync(makeTar([
+      { name: "owner-repo-aaaaaaaa/AGENTS.md", type: "0", content: "# encoded ref\n" }
+    ]));
+    globalThis.fetch = async (urlInput: string | URL | Request) => {
+      const url = String(urlInput);
+      if (url === "https://api.github.com/repos/owner/repo/commits/feature%2Fhardening") {
+        requestedEncodedRef = true;
+        return jsonResponse({ sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
+      }
+      if (url === "https://api.github.com/repos/owner/repo/tarball/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
+        return new Response(archive, { status: 200 });
+      }
+      throw new Error(`unexpected GitHub request: ${url}`);
+    };
+
+    const acquired = await acquireGitHubSource("https://github.com/owner/repo#feature%2Fhardening");
+
+    assert.equal(requestedEncodedRef, true);
+    assert.equal(acquired.source.requestedRef, "feature/hardening");
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreCacheEnv(originalCacheDir);
+  }
+});
+
 test("GitHub source detection is narrow", () => {
   assert.equal(isGitHubHttpsSource("https://github.com/owner/repo"), true);
   assert.equal(isGitHubHttpsSource("git@github.com:owner/repo.git"), false);
@@ -53,7 +85,8 @@ test("persisted GitHub plans install the frozen reviewed source without remote a
   const originalCacheDir = process.env.PREFLIGHTSEAL_CACHE_DIR;
   const target = await mkdtemp(path.join(os.tmpdir(), "pfs-gh-target-"));
   const cache = await mkdtemp(path.join(os.tmpdir(), "pfs-gh-cache-"));
-  const planPath = path.join(os.tmpdir(), `pfs-gh-plan-${process.pid}-${Date.now()}.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-gh-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   process.env.PREFLIGHTSEAL_CACHE_DIR = cache;
 
   try {

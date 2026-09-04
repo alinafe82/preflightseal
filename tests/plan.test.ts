@@ -116,7 +116,8 @@ test("plan verification rejects raw seal mismatch", async () => {
 });
 
 test("plan reader rejects unsupported major schema version", async () => {
-  const planPath = path.join(os.tmpdir(), `pfs-plan-${process.pid}-${Date.now()}.json`);
+  const planDir = await mkdtemp(path.join(os.tmpdir(), "pfs-plan-"));
+  const planPath = path.join(planDir, "plan.json");
   await writeFile(planPath, JSON.stringify({ schemaVersion: "preflightseal.plan.v2" }));
 
   await assert.rejects(readPlan(planPath), /unsupported plan schema/);
