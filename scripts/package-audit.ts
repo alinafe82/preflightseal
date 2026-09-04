@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -11,10 +12,21 @@ const PROHIBITED_PREFIXES = [
   ".specs/",
   "coverage/",
   "node_modules/",
+  "scripts/",
+  "src/",
   "tests/"
 ];
 
 async function main(): Promise<number> {
+  const packageJson = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8")) as {
+    bin?: Record<string, string>;
+  };
+  const cliBin = packageJson.bin?.preflightseal;
+  if (cliBin !== "dist/cli.js") {
+    console.error("package-audit: bin.preflightseal must point to dist/cli.js");
+    return 1;
+  }
+
   const result = await npmPackJson();
   process.stdout.write(result.output);
   process.stderr.write(result.errorOutput);
@@ -34,6 +46,15 @@ async function main(): Promise<number> {
   }
   if (!files.includes("schemas/preflight-plan.v1.schema.json")) {
     console.error("package-audit: schema files are missing from package");
+    return 1;
+  }
+  if (!files.includes(cliBin)) {
+    console.error("package-audit: CLI bin is missing from package");
+    return 1;
+  }
+  const cliSource = await readFile(path.join(ROOT, cliBin), "utf8");
+  if (!cliSource.startsWith("#!/usr/bin/env node\n")) {
+    console.error("package-audit: CLI bin is missing the node shebang");
     return 1;
   }
   console.log(`package-audit: reviewed ${files.length} package entries`);

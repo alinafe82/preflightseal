@@ -45,6 +45,13 @@ release.
 PreflightSeal does not run code from inspected repositories during acquire,
 inspect, analyze, or plan.
 
+## Install
+
+```sh
+npm install -g preflightseal
+preflightseal --help
+```
+
 ## Install From Source
 
 ```sh
@@ -57,6 +64,7 @@ node src/cli.ts --help
 For local dogfooding from this checkout:
 
 ```sh
+npm run build
 npm link
 preflightseal --help
 ```
