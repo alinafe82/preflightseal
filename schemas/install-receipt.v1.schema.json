@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/install-receipt.v1.schema.json",
+  "title": "PreflightSeal Install Receipt v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "receiptId",
+    "transactionId",
+    "planSeal",
+    "installedAt",
+    "target",
+    "acceptedWarningFingerprints",
+    "operations",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.receipt.v1" },
+    "receiptId": { "type": "string", "minLength": 1 },
+    "transactionId": { "type": "string", "minLength": 1 },
+    "planSeal": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "installedAt": { "type": "string", "format": "date-time" },
+    "target": {
+      "type": "object",
+      "required": ["runtime", "root"],
+      "properties": {
+        "runtime": { "const": "codex" },
+        "root": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "acceptedWarningFingerprints": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^pfs1:sha256:[a-f0-9]{64}$" }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op", "targetPath", "before", "after"],
+        "properties": {
+          "op": { "const": "write_file" },
+          "targetPath": { "type": "string", "minLength": 1 },
+          "before": { "$ref": "preflight-plan.v1.schema.json#/$defs/fileState" },
+          "after": { "$ref": "preflight-plan.v1.schema.json#/$defs/fileState" },
+          "backupPath": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "receiptDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

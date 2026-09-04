@@ -1,0 +1,19 @@
+{
+  "targets": [
+    {
+      "name": "preflightseal-self",
+      "url": "https://github.com/alinafe82/preflightseal",
+      "purpose": ["canonical-self", "github-acquisition", "agent-artifact-inspection"]
+    },
+    {
+      "name": "openai-codex",
+      "url": "https://github.com/openai/codex",
+      "purpose": ["agents-md", "package-json", "nested-configuration", "large-inventory"]
+    },
+    {
+      "name": "modelcontextprotocol-servers",
+      "url": "https://github.com/modelcontextprotocol/servers",
+      "purpose": ["mcp-declarations", "package-json", "python-manifests", "shell-installers"]
+    }
+  ]
+}

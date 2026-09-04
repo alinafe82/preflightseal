@@ -1,8 +1,13 @@
 import path from "node:path";
+import os from "node:os";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
 
 import type { AnalyzerResult, Finding, Inventory } from "../types.ts";
+import { normalizeFindings } from "../findings.ts";
+import { SCHEMA_VERSION } from "../schema.ts";
 import { sha256Json } from "../util/crypto.ts";
+import { isInside } from "../util/path.ts";
 import { sanitizeEvidence } from "../util/text.ts";
 
 export interface ScanContext {
@@ -34,71 +39,82 @@ export function snykAgentScanProvider(): ScannerProvider {
       if (skillFiles.length === 0) {
         return result("snyk-agent-scan", "NOT_APPLICABLE", startedAt, [], "No SKILL.md files found.");
       }
+      const executable = process.env.PREFLIGHTSEAL_SNYK_AGENT_SCAN;
+      if (!executable) {
+        return result("snyk-agent-scan", "UNAVAILABLE", startedAt, [], "PREFLIGHTSEAL_SNYK_AGENT_SCAN must point to a trusted scanner executable.");
+      }
+      if (!path.isAbsolute(executable)) {
+        return result("snyk-agent-scan", "UNAVAILABLE", startedAt, [], "PREFLIGHTSEAL_SNYK_AGENT_SCAN must be an absolute executable path.");
+      }
       if (!process.env.SNYK_TOKEN) {
         return result("snyk-agent-scan", "UNAVAILABLE", startedAt, [], "SNYK_TOKEN is not set.");
       }
 
       const findings: Finding[] = [];
       const rawReports: unknown[] = [];
-      for (const skillFile of skillFiles) {
-        const run = await spawnBounded("uvx", [
-          "--python",
-          "3.13",
-          `snyk-agent-scan@${SNYK_AGENT_SCAN_VERSION}`,
-          "scan",
-          skillFile,
-          "--json",
-          "--no-bootstrap"
-        ], context.timeoutMs);
+      const analyzerHome = await mkdtemp(path.join(os.tmpdir(), "preflightseal-analyzer-"));
+      try {
+        for (const skillFile of skillFiles) {
+          const run = await spawnBounded(executable, [
+            "scan",
+            skillFile,
+            "--json",
+            "--no-bootstrap"
+          ], context.timeoutMs, analyzerEnvironment(analyzerHome));
 
-        if (run.timedOut) {
-          return result("snyk-agent-scan", "TIMEOUT", startedAt, findings, `Timed out after ${context.timeoutMs} ms.`);
-        }
-        if (run.spawnError) {
-          return result("snyk-agent-scan", "UNAVAILABLE", startedAt, findings, run.spawnError);
-        }
+          if (run.timedOut) {
+            return result("snyk-agent-scan", "TIMEOUT", startedAt, findings, `Timed out after ${context.timeoutMs} ms.`);
+          }
+          if (run.spawnError) {
+            return result("snyk-agent-scan", "UNAVAILABLE", startedAt, findings, run.spawnError);
+          }
 
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(run.stdout);
-        } catch {
-          return result(
-            "snyk-agent-scan",
-            "ERROR",
-            startedAt,
-            findings,
-            `Scanner emitted malformed JSON: ${sanitizeEvidence(run.stderr || run.stdout)}`
-          );
-        }
-        rawReports.push(parsed);
-        findings.push(...normalizeSnykFindings(parsed, path.relative(context.sourceRoot, skillFile)));
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(run.stdout);
+          } catch {
+            return result(
+              "snyk-agent-scan",
+              "ERROR",
+              startedAt,
+              findings,
+              `Scanner emitted malformed JSON: ${sanitizeEvidence(run.stderr || run.stdout)}`
+            );
+          }
+          rawReports.push(parsed);
+          findings.push(...normalizeSnykFindings(parsed, path.relative(context.sourceRoot, skillFile), context.sourceRoot));
 
-        if (run.exitCode !== 0 && findings.length === 0) {
-          return result(
-            "snyk-agent-scan",
-            "ERROR",
-            startedAt,
-            findings,
-            `Scanner exited ${run.exitCode}: ${sanitizeEvidence(run.stderr)}`
-          );
+          if (run.exitCode !== 0 && findings.length === 0) {
+            return result(
+              "snyk-agent-scan",
+              "ERROR",
+              startedAt,
+              findings,
+              `Scanner exited ${run.exitCode}: ${sanitizeEvidence(run.stderr)}`
+            );
+          }
         }
+      } finally {
+        await rm(analyzerHome, { recursive: true, force: true }).catch(() => undefined);
       }
 
+      const normalizedFindings = normalizeFindings(dedupe(findings), "snyk-agent-scan");
       const finishedAt = new Date().toISOString();
       return {
+        schemaVersion: SCHEMA_VERSION.ANALYZER_RESULT,
         providerId: "snyk-agent-scan",
-        status: findings.length > 0 ? "FINDINGS" : "PASS",
+        status: normalizedFindings.length > 0 ? "FINDINGS" : "PASS",
         startedAt,
         finishedAt,
         version: SNYK_AGENT_SCAN_VERSION,
-        reportDigest: sha256Json({ findings, rawReports }),
-        findings
+        reportDigest: sha256Json({ findings: normalizedFindings, rawReports }),
+        findings: normalizedFindings
       };
     }
   };
 }
 
-async function spawnBounded(command: string, args: string[], timeoutMs: number): Promise<{
+async function spawnBounded(command: string, args: string[], timeoutMs: number, env: Record<string, string>): Promise<{
   exitCode: number | null;
   stdout: string;
   stderr: string;
@@ -108,11 +124,7 @@ async function spawnBounded(command: string, args: string[], timeoutMs: number):
   return await new Promise((resolve) => {
     const child = spawn(command, args, {
       shell: false,
-      env: {
-        HOME: process.env.HOME ?? "",
-        PATH: process.env.PATH ?? "",
-        SNYK_TOKEN: process.env.SNYK_TOKEN ?? ""
-      },
+      env,
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
@@ -154,7 +166,15 @@ async function spawnBounded(command: string, args: string[], timeoutMs: number):
   });
 }
 
-function normalizeSnykFindings(report: unknown, relativePath: string): Finding[] {
+function analyzerEnvironment(home: string): Record<string, string> {
+  return {
+    HOME: home,
+    PATH: "/usr/bin:/bin",
+    SNYK_TOKEN: process.env.SNYK_TOKEN ?? ""
+  };
+}
+
+function normalizeSnykFindings(report: unknown, relativePath: string, sourceRoot: string): Finding[] {
   const findings: Finding[] = [];
   const stack: unknown[] = [report];
   while (stack.length > 0) {
@@ -175,7 +195,7 @@ function normalizeSnykFindings(report: unknown, relativePath: string): Finding[]
         title,
         decision: severity === "critical" || severity === "high" ? "WARN" : "WARN",
         severity,
-        path: firstString(record.path, record.file) || relativePath,
+        path: normalizeScannerPath(firstString(record.path, record.file), sourceRoot) || relativePath,
         evidence: sanitizeEvidence(firstString(record.description, record.message, record.summary) || title),
         recommendation: "Review scanner evidence and require scoped acceptance before installation."
       });
@@ -209,16 +229,29 @@ function result(
   findings: Finding[],
   error?: string
 ): AnalyzerResult {
+  const normalizedFindings = normalizeFindings(findings, providerId);
   return {
+    schemaVersion: SCHEMA_VERSION.ANALYZER_RESULT,
     providerId,
     status,
     startedAt,
     finishedAt: new Date().toISOString(),
     version: SNYK_AGENT_SCAN_VERSION,
-    reportDigest: sha256Json({ status, findings, error }),
-    findings,
+    reportDigest: sha256Json({ status, findings: normalizedFindings, error }),
+    findings: normalizedFindings,
     error
   };
+}
+
+function normalizeScannerPath(value: string | undefined, sourceRoot: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const absolute = path.isAbsolute(value) ? value : path.resolve(sourceRoot, value);
+  if (isInside(sourceRoot, absolute)) {
+    return path.relative(sourceRoot, absolute).split(path.sep).join("/");
+  }
+  return value.split(path.sep).join("/");
 }
 
 function dedupe(findings: Finding[]): Finding[] {

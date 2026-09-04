@@ -2,6 +2,8 @@ import path from "node:path";
 import { readFile } from "node:fs/promises";
 
 import type { AnalyzerResult, Finding, Inventory } from "../types.ts";
+import { normalizeFindings } from "../findings.ts";
+import { SCHEMA_VERSION } from "../schema.ts";
 import { sha256Json } from "../util/crypto.ts";
 import { sanitizeEvidence } from "../util/text.ts";
 
@@ -13,6 +15,16 @@ const lifecycleScriptNames = new Set([
   "prepublish",
   "prepack",
   "postpack"
+]);
+
+const sourcePolicyFileNames = new Set([
+  "preflightseal.yaml",
+  "preflightseal.yml",
+  "policy.json",
+  "agent-vet.yaml",
+  "agent-vet.yml",
+  "security-policy.yaml",
+  "security-policy.yml"
 ]);
 
 const riskyTextRules: Array<{
@@ -172,6 +184,18 @@ export async function runNativeAnalyzer(sourceRoot: string, inventory: Inventory
       });
     }
 
+    if (sourcePolicyFileNames.has(path.posix.basename(entry.path).toLocaleLowerCase("en-US"))) {
+      findings.push({
+        id: "PFS-SOURCE-SUPPLIED-POLICY",
+        title: "Source-supplied policy file",
+        decision: "WARN",
+        severity: "high",
+        path: entry.path,
+        evidence: "policy-like files in the inspected source are untrusted content",
+        recommendation: "Use an operator-controlled policy instead of trusting policy files from the source."
+      });
+    }
+
     const absolute = path.join(sourceRoot, entry.path);
     if (entry.path.endsWith("package.json")) {
       findings.push(...await analyzePackageJson(absolute, entry.path));
@@ -182,9 +206,10 @@ export async function runNativeAnalyzer(sourceRoot: string, inventory: Inventory
     }
   }
 
-  const unique = dedupeFindings(findings);
+  const unique = normalizeFindings(dedupeFindings(findings), "native-install-boundary");
   const finishedAt = new Date().toISOString();
   return {
+    schemaVersion: SCHEMA_VERSION.ANALYZER_RESULT,
     providerId: "native-install-boundary",
     status: unique.length > 0 ? "FINDINGS" : "PASS",
     startedAt,

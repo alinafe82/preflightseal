@@ -2,6 +2,7 @@ import path from "node:path";
 import { lstat } from "node:fs/promises";
 
 import type { InstallOperation, Inventory, TargetStatePrecondition } from "../types.ts";
+import { SCHEMA_VERSION } from "../schema.ts";
 import { sha256File } from "../util/crypto.ts";
 import { validateDestinationForWrite, validateRelativePath } from "../util/path.ts";
 
@@ -26,6 +27,7 @@ export async function planCodexOperations(
     validateRelativePath(targetPath);
     await validateDestinationForWrite(targetRoot, targetPath);
     operations.push({
+      schemaVersion: SCHEMA_VERSION.INSTALL_OPERATION,
       op: "write_file",
       sourcePath: entry.path,
       targetPath,

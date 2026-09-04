@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/policy-evaluation.v1.schema.json",
+  "title": "PreflightSeal Policy Evaluation v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "decision",
+    "reasons",
+    "warningIds",
+    "warningFingerprints",
+    "blockingIds",
+    "blockingFingerprints",
+    "inconclusiveProviderIds"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.policy-evaluation.v1" },
+    "decision": { "enum": ["ALLOW", "WARN", "BLOCK", "INCONCLUSIVE"] },
+    "reasons": { "type": "array", "items": { "type": "string" } },
+    "warningIds": { "type": "array", "items": { "type": "string" } },
+    "warningFingerprints": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^pfs1:sha256:[a-f0-9]{64}$" }
+    },
+    "blockingIds": { "type": "array", "items": { "type": "string" } },
+    "blockingFingerprints": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^pfs1:sha256:[a-f0-9]{64}$" }
+    },
+    "inconclusiveProviderIds": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}

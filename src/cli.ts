@@ -5,6 +5,8 @@ import path from "node:path";
 import { inspectSource, createPlan, readPlan } from "./plan.ts";
 import { installPlan, readReceipt, rollbackReceipt, verifyReceipt } from "./install/transaction.ts";
 import { defaultPolicy, evaluatePolicy } from "./policy.ts";
+import { SCHEMA_VERSION } from "./schema.ts";
+import type { Finding, PreflightPlan } from "./types.ts";
 
 interface ParsedArgs {
   command?: string;
@@ -42,12 +44,19 @@ async function main(argv: string[]): Promise<number> {
     }
   } catch (error) {
     const message = (error as Error).message;
+    const classified = classifyError(message);
     if (parsed.flags.has("json")) {
-      console.log(JSON.stringify({ ok: false, error: message }, null, 2));
+      console.log(JSON.stringify({
+        ok: false,
+        code: classified.code,
+        decision: classified.decision,
+        message,
+        evidence: []
+      }, null, 2));
     } else {
       console.error(`preflightseal: ${message}`);
     }
-    return 1;
+    return classified.exitCode;
   }
 }
 
@@ -94,6 +103,7 @@ async function cmdPlan(parsed: ParsedArgs): Promise<number> {
     }
     if (plan.evaluation.warningIds.length > 0) {
       console.log(`warnings: ${plan.evaluation.warningIds.join(", ")}`);
+      printWarningAcceptance(plan, out);
     }
     if (plan.evaluation.blockingIds.length > 0) {
       console.log(`blocking: ${plan.evaluation.blockingIds.join(", ")}`);
@@ -106,7 +116,7 @@ async function cmdInstall(parsed: ParsedArgs): Promise<number> {
   const planPath = requiredPositional(parsed, 0, "plan path");
   const plan = await readPlan(planPath);
   const { receiptPath } = await installPlan(plan, {
-    acceptedWarnings: flagList(parsed, "accept-warning")
+    acceptedWarningFingerprints: flagList(parsed, "accept-warning")
   });
   if (parsed.flags.has("json")) {
     console.log(JSON.stringify({ ok: true, receiptPath }, null, 2));
@@ -145,7 +155,7 @@ async function cmdExplain(parsed: ParsedArgs): Promise<number> {
     console.log(JSON.stringify(data, null, 2));
     return 0;
   }
-  if (data.schemaVersion === "preflightseal.plan.v1") {
+  if (data.schemaVersion === SCHEMA_VERSION.PLAN) {
     console.log(`plan seal: ${data.seal}`);
     console.log(`decision: ${data.evaluation.decision}`);
     console.log(`target: ${data.target.runtime} at ${data.target.root}`);
@@ -153,7 +163,7 @@ async function cmdExplain(parsed: ParsedArgs): Promise<number> {
     console.log(`reasons: ${data.evaluation.reasons.join("; ")}`);
     return statusCode(data.evaluation.decision);
   }
-  if (data.schemaVersion === "preflightseal.receipt.v1") {
+  if (data.schemaVersion === SCHEMA_VERSION.RECEIPT) {
     console.log(`receipt digest: ${data.receiptDigest}`);
     console.log(`plan seal: ${data.planSeal}`);
     console.log(`operations: ${data.operations.length}`);
@@ -220,20 +230,73 @@ function statusCode(decision: string): number {
   }
 }
 
+function classifyError(message: string): { code: string; decision?: string; exitCode: number } {
+  const match = message.match(/\b(PFS_[A-Z0-9_]+):/);
+  const code = match?.[1] ?? "PFS_OPERATION_FAILED";
+  const decision = decisionForError(code, message);
+  return {
+    code,
+    decision,
+    exitCode: decision ? statusCode(decision) : 5
+  };
+}
+
+function decisionForError(code: string, message: string): string | undefined {
+  if (code === "PFS_INSTALL_UNSUPPORTED" && message.includes("fingerprint acceptance")) {
+    return "WARN";
+  }
+  if (code === "PFS_INSTALL_UNSUPPORTED" && message.includes("BLOCK")) {
+    return "BLOCK";
+  }
+  if (code === "PFS_INSTALL_UNSUPPORTED" && message.includes("INCONCLUSIVE")) {
+    return "INCONCLUSIVE";
+  }
+  if (code === "PFS_PLAN_TAMPERED" || code === "PFS_POLICY_CHANGED" || code === "PFS_ANALYZER_INVALID") {
+    return "BLOCK";
+  }
+  if (code === "PFS_SOURCE_CHANGED" || code === "PFS_TARGET_CHANGED" || code === "PFS_FROZEN_SOURCE_MISSING" || code === "PFS_ARCHIVE_LIMIT") {
+    return "INCONCLUSIVE";
+  }
+  if (code === "PFS_TARGET_LOCKED" || code === "PFS_ROLLBACK_CONFLICT") {
+    return undefined;
+  }
+  return undefined;
+}
+
+function printWarningAcceptance(plan: PreflightPlan, out?: string): void {
+  const warnings = warningFindings(plan);
+  for (const finding of warnings) {
+    console.log(`WARN ${finding.id}${finding.path ? ` ${finding.path}` : ""}`);
+    console.log("Fingerprint:");
+    console.log(`  ${finding.fingerprint}`);
+    console.log("Accept explicitly:");
+    console.log("  preflightseal install " + (out ? path.resolve(out) : "plan.json") + " \\");
+    console.log(`    --accept-warning ${finding.fingerprint}`);
+  }
+}
+
+function warningFindings(plan: PreflightPlan): Finding[] {
+  const required = new Set(plan.warningFingerprints);
+  return plan.analyzerResults
+    .flatMap((result) => result.findings)
+    .filter((finding) => finding.decision === "WARN" && required.has(finding.fingerprint))
+    .sort((a, b) => a.fingerprint.localeCompare(b.fingerprint));
+}
+
 function printHelp(): void {
   console.log(`PreflightSeal - Inspect before install. Install only what you inspected.
 
 Usage:
   preflightseal inspect <source> [--json] [--scanner snyk-agent-scan]
   preflightseal plan <source> --target codex --target-root <dir> --out plan.json [--json]
-  preflightseal install <plan.json> [--accept-warning ID] [--json]
+  preflightseal install <plan.json> [--accept-warning pfs1:sha256:...] [--json]
   preflightseal verify <receipt.json> [--json]
   preflightseal rollback <receipt.json> [--json]
   preflightseal explain <plan-or-receipt.json> [--json]
 
 Decision states:
   ALLOW          install may proceed
-  WARN           explicit scoped acceptance required
+  WARN           explicit finding-fingerprint acceptance required
   BLOCK          installation refused
   INCONCLUSIVE   required evidence is missing or unsafe to interpret
 `);

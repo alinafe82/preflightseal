@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://preflightseal.dev/schemas/analyzer-result.v1.schema.json",
+  "title": "PreflightSeal Analyzer Result v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "providerId",
+    "status",
+    "startedAt",
+    "finishedAt",
+    "reportDigest",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "preflightseal.analyzer-result.v1" },
+    "providerId": { "type": "string", "minLength": 1 },
+    "status": {
+      "enum": ["PASS", "FINDINGS", "ERROR", "TIMEOUT", "UNAVAILABLE", "NOT_RUN", "NOT_APPLICABLE", "PARTIAL"]
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "version": { "type": "string" },
+    "reportDigest": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "findings": { "type": "array", "items": { "$ref": "finding.v1.schema.json" } },
+    "error": { "type": "string" }
+  },
+  "additionalProperties": false
+}

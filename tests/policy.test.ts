@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { defaultPolicy, evaluatePolicy } from "../src/policy.ts";
+import { normalizeFinding } from "../src/findings.ts";
 import type { AnalyzerResult } from "../src/types.ts";
 
 function analyzer(findings: AnalyzerResult["findings"], status: AnalyzerResult["status"] = "FINDINGS"): AnalyzerResult {
@@ -25,9 +26,11 @@ test("WARN findings require explicit scoped acceptance", () => {
     evidence: "instruction file",
     recommendation: "accept if reviewed"
   };
+  const normalizedWarning = normalizeFinding(warning, "native-install-boundary");
 
-  assert.equal(evaluatePolicy(policy, [analyzer([warning])]).decision, "WARN");
-  assert.equal(evaluatePolicy(policy, [analyzer([warning])], ["PFS-CODEX-INSTRUCTIONS"]).decision, "ALLOW");
+  assert.equal(evaluatePolicy(policy, [analyzer([normalizedWarning])]).decision, "WARN");
+  assert.equal(evaluatePolicy(policy, [analyzer([normalizedWarning])], [normalizedWarning.fingerprint]).decision, "ALLOW");
+  assert.equal(evaluatePolicy(policy, [analyzer([normalizedWarning])], ["PFS-CODEX-INSTRUCTIONS"]).decision, "WARN");
 });
 
 test("required scanner failure is inconclusive, not allow", () => {
@@ -45,5 +48,6 @@ test("block findings override warning acceptance", () => {
     evidence: "curl | bash",
     recommendation: "refuse"
   };
-  assert.equal(evaluatePolicy(policy, [analyzer([blocking])], ["PFS-CURL-BASH"]).decision, "BLOCK");
+  const normalizedBlocking = normalizeFinding(blocking, "native-install-boundary");
+  assert.equal(evaluatePolicy(policy, [analyzer([normalizedBlocking])], [normalizedBlocking.fingerprint]).decision, "BLOCK");
 });

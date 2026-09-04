@@ -22,13 +22,16 @@ testable transactional slice:
 
 - inspect a local directory without executing repository code
 - acquire a public GitHub HTTPS repository by immutable commit and inspect the
-  safely extracted archive
+  safely extracted, digest-addressed archive
 - inventory agent-relevant files and executable surfaces
 - detect high-risk install behavior with deterministic native rules
 - produce a content-integrity seal over the reviewed source, evidence, policy,
   target, preconditions, and operation plan
-- install approved Codex instruction files transactionally
-- verify or roll back the receipt without destroying later user changes
+- install approved Codex instruction files from the frozen source without
+  re-resolving remote refs
+- use a target-scoped transaction lock during mutation
+- verify or roll back transaction-scoped receipts without destroying later user
+  changes or unrelated receipts
 
 Additional target runtimes, deeper package analysis, attestation verification,
 and signed seals are extension points. They are not claimed as complete in this
@@ -45,7 +48,7 @@ inspect, analyze, or plan.
 ## Install From Source
 
 ```sh
-git clone https://github.com/preflightseal/preflightseal.git
+git clone https://github.com/alinafe82/preflightseal.git
 cd preflightseal
 npm test
 node src/cli.ts --help
@@ -63,14 +66,14 @@ preflightseal --help
 ```sh
 preflightseal inspect <source> [--json]
 preflightseal plan <source> --target codex --target-root <dir> --out plan.json
-preflightseal install plan.json [--accept-warning PFS-CODEX-INSTRUCTIONS]
+preflightseal install plan.json [--accept-warning pfs1:sha256:...]
 preflightseal verify <receipt.json>
 preflightseal rollback <receipt.json>
 preflightseal explain <plan-or-receipt.json>
 ```
 
 `BLOCK` and `INCONCLUSIVE` plans cannot be installed. `WARN` plans require
-explicit acceptance of each warning id at install time.
+explicit acceptance of each warning fingerprint at install time.
 
 ## Example
 
@@ -83,7 +86,8 @@ preflightseal plan /tmp/agent-source \
   --target-root /tmp/agent-target \
   --out /tmp/preflightseal-plan.json
 
-preflightseal install /tmp/preflightseal-plan.json
+preflightseal install /tmp/preflightseal-plan.json \
+  --accept-warning pfs1:sha256:...
 preflightseal verify /tmp/agent-target/.preflightseal/receipts/*.json
 ```
 
@@ -110,6 +114,26 @@ not authority. PreflightSeal parses files, hashes bytes, and builds a plan; it
 does not run repository installers, package lifecycle scripts, hooks, MCP
 servers, or shell snippets during inspection.
 
+GitHub sources are frozen into a local content-addressed cache. A persisted plan
+records the remote identity separately from the immutable cache locator, and
+`install` consumes the cached artifact instead of contacting GitHub again.
+
+Optional external scanner providers must be explicitly configured by the
+operator. The Snyk Agent Scan provider requires `PREFLIGHTSEAL_SNYK_AGENT_SCAN`
+to point at an absolute trusted executable path and runs with an isolated
+temporary `HOME`; it does not dynamically fetch a scanner as the default path.
+
+## Known Limitations
+
+- Only the `codex` target is implemented.
+- Automatic writes are limited to statically modeled instruction and skill
+  files.
+- Hooks, MCP registration, broad config replacement, dependency vulnerability
+  scanning, signed attestations, and Windows path semantics are not implemented
+  in v0.1.
+- Warning acceptance uses stable finding fingerprints. The same warning rule on
+  different evidence must be accepted separately.
+
 See:
 
 - [Threat Model](docs/threat-model.md)
@@ -124,7 +148,14 @@ See:
 npm test
 npm run check
 npm run smoke
+npm run schemas:check
+npm run coverage
+npm run dogfood:fixtures
+npm run dogfood:self
 ```
+
+`dogfood:self` checks the canonical public GitHub source first and falls back
+to the current checkout outside CI when that source is unavailable.
 
 Before release, run a repository-wide contamination and secret audit, then run
 the test suite from a clean checkout.
