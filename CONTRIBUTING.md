@@ -8,6 +8,9 @@ small, reviewable changes with executable evidence.
 ```sh
 npm test
 npm run check
+npm run coverage
+npm run schemas:check
+npm run dogfood:fixtures
 ```
 
 ## Rules
@@ -25,7 +28,12 @@ npm run check
 
 - `npm test`
 - `npm run check`
+- `npm run coverage`
+- `npm run schemas:check`
+- `npm run dogfood:fixtures`
+- `npm run package:audit`
+- `npm run secret:scan`
+- `npm run release:contamination-check`
 - clean `git status --short`
-- package metadata review
-- repository-wide secret and contamination audit
 - inspect published package contents with `npm pack --dry-run`
+- publish from protected `main` through GitHub Actions trusted publishing

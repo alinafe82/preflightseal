@@ -141,6 +141,7 @@ See:
 - [Product Boundaries](docs/product-boundaries.md)
 - [Research](docs/research.md)
 - [Competitive Landscape](docs/competitive-landscape.md)
+- [Publication Security](docs/publication-security.md)
 
 ## Development
 

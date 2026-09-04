@@ -14,3 +14,5 @@
   contamination checks, and deterministic dogfood coverage.
 - Made local self-dogfood fall back to the current checkout outside CI when the
   canonical public GitHub source is unavailable.
+- Added public-repository protection metadata, dependency monitoring, CodeQL
+  scanning, and npm provenance release workflow configuration.
