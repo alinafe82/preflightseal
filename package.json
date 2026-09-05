@@ -1,6 +1,6 @@
 {
   "name": "preflightseal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inspect before install. Install only what you inspected.",
   "type": "module",
   "homepage": "https://github.com/alinafe82/preflightseal#readme",
