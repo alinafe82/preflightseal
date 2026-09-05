@@ -150,6 +150,7 @@ See:
 - [Research](docs/research.md)
 - [Competitive Landscape](docs/competitive-landscape.md)
 - [Publication Security](docs/publication-security.md)
+- [Release Process](docs/release-process.md)
 
 ## Development
 
