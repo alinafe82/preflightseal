@@ -47,8 +47,9 @@ private repository on GitHub Free.
 
 ## npm Package Controls
 
-Before announcement, publish or reserve the official `preflightseal` npm package
-from the maintainer account.
+The official `preflightseal` npm package is published from the maintainer
+account and maintained through the release process in
+[`docs/release-process.md`](release-process.md).
 
 - Require two-factor authentication for publishing and settings changes.
 - Prefer npm trusted publishing from GitHub Actions over long-lived npm tokens.
